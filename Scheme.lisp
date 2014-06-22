@@ -20,19 +20,20 @@
 ;;; (+ 3 4 (+ 4 5))
 ;;; (+ 3 4 9)
 ;;; --> 16
+;;; TODO maybe change the whole structure to a cond?
 (defun evall (expr)
-	;(print (car expr))
 	(if (atomp expr)
 		expr
-		(progn
-			(if (equal 'if (car expr))
-				(if-eval expr)
-				(progn
-					(multiple-value-setq (op flag) (get-function (car expr)))
-					(if (eql flag t)
-						(apply op (mapcar #'evall (rest expr)))))))))
+		(cond ((equal 'if (car expr)) (if-eval expr))
+					(t 
+						(multiple-value-setq (op flag) (get-function (car expr)))
+						(if (eql flag t)
+						(apply op (mapcar #'evall (rest expr))))))))
 
 ;;; Evaluates an IF expression
+;;; (if-eval (if (= 1 1) 1 2)
+;;; (if (evall (= 1 1)) 1 2)
+;;; --> 1
 (defun if-eval (expr)
 	(if (eql t (evall (cadr expr)))
 		(evall (caddr expr))
