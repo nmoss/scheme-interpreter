@@ -6,21 +6,37 @@
 (defun revalp ()
 	(set-functions)
 	(format t "~% -->")
-	(print (eval-2 (read)))
+	(print (evall (read)))
 	(revalp))
 
 (defun atomp (x)
 	(if (numberp x) t nil))
 
-(defun eval-2 (expr)
+;;; Reads a Scheme expression, if the expression is a number (atom) it returns that number
+;;; If not it looks up the associated function (value of the symbol), and then evaluates the arguments which may themselves be functions.
+;;; (eval-2 (+ 3 4 (+ 4 5)))
+;;; (+ (evall 3) (evall 4) (evall (+ 4 5)))
+;;; (+ 3 4 (+ (evall 4) (evall 5)))
+;;; (+ 3 4 (+ 4 5))
+;;; (+ 3 4 9)
+;;; --> 16
+(defun evall (expr)
+	;(print (car expr))
 	(if (atomp expr)
 		expr
 		(progn
-			(multiple-value-setq (op flag) (get-function (car expr)))
-			(if (eql flag t)
-				(apply op (mapcar #'eval-2 (rest expr)))
-				(car expr)))))
+			(if (equal 'if (car expr))
+				(if-eval expr)
+				(progn
+					(multiple-value-setq (op flag) (get-function (car expr)))
+					(if (eql flag t)
+						(apply op (mapcar #'evall (rest expr)))))))))
 
+;;; Evaluates an IF expression
+(defun if-eval (expr)
+	(if (eql t (evall (cadr expr)))
+		(evall (caddr expr))
+		(evall (cadddr expr))))
 
 (defvar *func-table* (make-hash-table :test #'equal))
 
