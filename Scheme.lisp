@@ -57,8 +57,9 @@
 ;;; (set! var (lambda (x) (* x x))) for example
 ;;; TODO remove the seperate case for functions there shouldn't be a need for a seperate case
 (defun set-eval (expr)
-	(if (equal 'lambda (car (caddr expr)))
-		(set-function (cadr expr) (caddr expr)) 
+	(if (consp (caddr expr))
+		(if (equal 'lambda (car (caddr expr)))
+			(set-function (cadr expr) (caddr expr))) 
 		(set-variable (cadr expr) (evall (caddr expr)))))
 	
 ;;; Hash table for holding user defined functions and variables 
