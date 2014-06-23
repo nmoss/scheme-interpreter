@@ -30,10 +30,17 @@
 				sym ;; what the expr evaluates to
 				(cond ((equal 'if (car expr)) (if-eval expr))
 							((equal 'set! (car expr)) (set-eval expr))
+							((equal 'quote (car expr)) (quote-eval expr))
 							(t 
 								(multiple-value-setq (op flag) (get-function (car expr)))
 								(if (eql flag t)
 								(apply op (mapcar #'evall (rest expr))))))))))
+
+;;; Returns the value of an expression preceded by quote
+;;; (quote x)
+;;; --> X
+(defun quote-eval (expr)
+	(cadr expr))
 
 ;;; Evaluates an IF expression
 ;;; (if-eval (if (= 1 1) 1 2)
