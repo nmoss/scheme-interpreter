@@ -31,6 +31,7 @@
 				(cond ((equal 'if (car expr)) (if-eval expr))
 							((equal 'set! (car expr)) (set-eval expr))
 							((equal 'quote (car expr)) (quote-eval expr))
+							((equal 'lambda (car expr)) expr)
 							(t 
 								(multiple-value-setq (op flag) (get-function (car expr)))
 								(if (eql flag t)
@@ -54,8 +55,11 @@
 ;;; Sets a variable to given value which is either an atom or a function, TODO add environment/scope later
 ;;; (set! var 2)
 ;;; (set! var (lambda (x) (* x x))) for example
+;;; TODO remove the seperate case for functions there shouldn't be a need for a seperate case
 (defun set-eval (expr)
-	(set-variable (cadr expr) (evall (caddr expr))))
+	(if (equal 'lambda (car (caddr expr)))
+		(set-function (cadr expr) (caddr expr)) 
+		(set-variable (cadr expr) (evall (caddr expr)))))
 	
 ;;; Hash table for holding user defined functions and variables 
 (defvar *sym-table* (make-hash-table :test #'equal))
@@ -67,6 +71,9 @@
 	(gethash sym *sym-table*))
 
 (defvar *func-table* (make-hash-table :test #'equal))
+
+(defun set-function (name body)
+	(setf (gethash name *func-table*)  (eval body))) ;;; TODO figure out what eval is doing to this lambda expression
 
 (defun set-functions ()
 	(setf (gethash '+ *func-table*) #'+)
@@ -101,6 +108,5 @@
 (defun get-function (op)
 	(gethash op *func-table*))
 	
-
 
 
