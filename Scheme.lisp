@@ -22,20 +22,64 @@
 ;;; --> 16
 ;;; TODO maybe change the whole structure to a cond?
 (defun evall (expr)
+	(print "EVALL")
+	(print expr)
 	(if (atomp expr)
 		expr
 		(progn
-			(multiple-value-setq (sym fl) (get-variable expr))
+			(if (consp expr) ;; change which one is running depending on if a function call or variable
+				(multiple-value-setq (sym fl) (get-variable (car expr))) ;; to handle (f 3) for example 
+				(multiple-value-setq (sym fl) (get-variable expr)))
 			(if (eql t fl)
-				sym ;; what the expr evaluates to
+				(if (not (consp sym))
+					sym ;; what the expr evaluates to
+					(lambda-run sym (cdr expr))) ; evaluates a user defined closure
 				(cond ((equal 'if (car expr)) (if-eval expr))
 							((equal 'set! (car expr)) (set-eval expr))
 							((equal 'quote (car expr)) (quote-eval expr))
-							((equal 'lambda (car expr)) expr)
+							((equal 'lambda (car expr)) (lambda-eval expr))
 							(t 
 								(multiple-value-setq (op flag) (get-function (car expr)))
 								(if (eql flag t)
 								(apply op (mapcar #'evall (rest expr))))))))))
+
+;;; Creates a closure object given a lambda expression
+(defun lambda-eval (expr)
+	(print (cadr expr))
+	(print (cddr expr))
+	(make-closure (cadr expr) (cddr expr)))
+
+;;; Runs a closure object as a function by matching formal parameters with actual parameters
+(defun lambda-run (name args)
+	(print "lambda-run")
+	(let ((formal-args (get-formal name))
+				(body-exprs (get-body name)))
+		(if (not (eql (length args) (length formal-args)))
+			(print "Error args not matching.")
+			(progn
+				;(set-variable (car formal-args) (car args))
+				;(do ((i -1 (1+ i))) ;;TODO get this disgusting loop out of here
+				;		((< i (length args)))
+				;		(set-variable (nth (1+ i) formal-args) (nth (1+ i) args))) ;;; eventually have it set up it's own hash table seperate from global scope
+				(mapcar #'set-variable formal-args args)
+				(car (mapcar #'evall body-exprs))))))
+
+(defun make-closure (formal body)
+	(list 'closure formal body))
+
+;(defun get-envt (closure)
+;	(car (cdr closure)))
+
+(defun get-formal (closure)
+	(car (cdr closure)))
+
+(defun get-body (closure)
+	(car (cdr (cdr closure))))
+
+(defun closure-p (expr)
+	(if (equal 'closure (car expr))
+		t
+		nil))
 
 ;;; Returns the value of an expression preceded by quote
 ;;; (quote x)
@@ -57,10 +101,9 @@
 ;;; (set! var (lambda (x) (* x x))) for example
 ;;; TODO remove the seperate case for functions there shouldn't be a need for a seperate case
 (defun set-eval (expr)
-	(if (consp (caddr expr))
-		(if (equal 'lambda (car (caddr expr)))
-			(set-function (cadr expr) (caddr expr))) 
-		(set-variable (cadr expr) (evall (caddr expr)))))
+	(print "set-eval")
+	(print (caddr expr))
+	(set-variable (cadr expr) (evall (caddr expr))))
 	
 ;;; Hash table for holding user defined functions and variables 
 (defvar *sym-table* (make-hash-table :test #'equal))
@@ -76,6 +119,7 @@
 (defun set-function (name body)
 	(setf (gethash name *func-table*)  (eval body))) ;;; TODO figure out what eval is doing to this lambda expression
 
+;;; Sets up the built in primitives from the underlying lisp implementation
 (defun set-functions ()
 	(setf (gethash '+ *func-table*) #'+)
 	(setf (gethash '- *func-table*) #'-)
@@ -89,6 +133,9 @@
 	(setf (gethash 'and *func-table*) #'scheme-and)
 	(setf (gethash 'or *func-table*) #'scheme-or)
 	(setf (gethash 'not *func-table*) #'scheme-not))
+
+(defun get-function (op)
+	(gethash op *func-table*))
 
 ;;; TODO add &rest to handle arbitrary number of arguments
 (defun scheme-and (expr1 expr2)
@@ -105,9 +152,4 @@
 	(if (eql t expr)
 		nil
 		t))
-
-(defun get-function (op)
-	(gethash op *func-table*))
-	
-
 
