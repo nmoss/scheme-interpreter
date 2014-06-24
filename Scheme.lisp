@@ -33,7 +33,7 @@
 			(if (eql t fl)
 				(if (not (consp sym))
 					sym ;; what the expr evaluates to
-					(lambda-run sym (cdr expr))) ; evaluates a user defined closure
+					(lambda-run sym (mapcar #'evall (cdr expr)))) ; evaluates a user defined closure
 				(cond ((equal 'if (car expr)) (if-eval expr))
 							((equal 'set! (car expr)) (set-eval expr))
 							((equal 'quote (car expr)) (quote-eval expr))
@@ -44,6 +44,7 @@
 								(apply op (mapcar #'evall (rest expr))))))))))
 
 ;;; Creates a closure object given a lambda expression
+;;; Doesn't run the function because it has no actual arguments only defines the function to be called later
 (defun lambda-eval (expr)
 	(print (cadr expr))
 	(print (cddr expr))
@@ -52,7 +53,7 @@
 ;;; Runs a closure object as a function by matching formal parameters with actual parameters
 (defun lambda-run (name args)
 	(print "lambda-run")
-	(let ((formal-args (get-formal name))
+	(let ((formal-args (get-formal name)) 
 				(body-exprs (get-body name)))
 		(if (not (eql (length args) (length formal-args)))
 			(print "Error args not matching.")
