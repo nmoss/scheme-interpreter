@@ -57,10 +57,6 @@
 		(if (not (eql (length args) (length formal-args)))
 			(print "Error args not matching.")
 			(progn
-				;(set-variable (car formal-args) (car args))
-				;(do ((i -1 (1+ i))) ;;TODO get this disgusting loop out of here
-				;		((< i (length args)))
-				;		(set-variable (nth (1+ i) formal-args) (nth (1+ i) args))) ;;; eventually have it set up it's own hash table seperate from global scope
 				(mapcar #'set-variable formal-args args)
 				(car (mapcar #'evall body-exprs))))))
 
