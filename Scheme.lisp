@@ -63,10 +63,10 @@
 			(print "Error args not matching.")
 			(progn
 				(mapcar #'set-variable formal-args args)
-				(let ((result (last (mapcar #'evall body-exprs))))
+				(let ((result (mapcar #'evall body-exprs)))
 					(print *envts*)
 					(pop *envts*)
-					(car result))))))
+					(nth (- (length result) 1) result))))))
 
 ;;; Creates a new closure with the envts being a deep copy of the list of current environments do a copy tree or something
 ;;; needs to be a deep copy for lexical scope preservation
