@@ -5,6 +5,8 @@
 ;;; Read-eval-print
 (defun revalp ()
 	(set-functions)
+	(if (equal nil *envts*)
+		(push *sym-table* *envts*))
 	(format t "~% -->")
 	(print (evall (read)))
 	(revalp))
@@ -28,8 +30,8 @@
 		expr
 		(progn
 			(if (consp expr) ;; change which one is running depending on if a function call or variable
-				(multiple-value-setq (sym fl) (get-variable (car expr))) ;; to handle (f 3) for example 
-				(multiple-value-setq (sym fl) (get-variable expr)))
+				(multiple-value-setq (sym fl) (get-variable (car expr) *envts*)) ;; to handle (f 3) for example 
+				(multiple-value-setq (sym fl) (get-variable expr *envts*)))
 			(if (eql t fl)
 				(if (not (consp sym))
 					sym ;; what the expr evaluates to
@@ -40,8 +42,9 @@
 							((equal 'lambda (car expr)) (lambda-eval expr))
 							(t 
 								(multiple-value-setq (op flag) (get-function (car expr)))
+								(print "last...")
 								(if (eql flag t)
-								(apply op (mapcar #'evall (rest expr))))))))))
+									(apply op (mapcar #'evall (rest expr))))))))))
 
 ;;; Creates a closure object given a lambda expression
 ;;; Doesn't run the function because it has no actual arguments only defines the function to be called later
@@ -51,27 +54,38 @@
 	(make-closure (cadr expr) (cddr expr)))
 
 ;;; Runs a closure object as a function by matching formal parameters with actual parameters
-(defun lambda-run (name args)
+(defun lambda-run (closure args)
 	(print "lambda-run")
-	(let ((formal-args (get-formal name)) 
-				(body-exprs (get-body name)))
+	(push (make-envt) *envts*) ;;; make a local environment
+	(let ((formal-args (get-formal closure)) 
+				(body-exprs (get-body closure)))
 		(if (not (eql (length args) (length formal-args)))
 			(print "Error args not matching.")
 			(progn
 				(mapcar #'set-variable formal-args args)
-				(car (mapcar #'evall body-exprs))))))
+				(let ((result (last (mapcar #'evall body-exprs))))
+					(print *envts*)
+					(pop *envts*)
+					(car result))))))
 
+;;; Creates a new closure with the envts being a deep copy of the list of current environments do a copy tree or something
+;;; needs to be a deep copy for lexical scope preservation
 (defun make-closure (formal body)
 	(list 'closure formal body))
 
-;(defun get-envt (closure)
-;	(car (cdr closure)))
+(defun get-envt (closure)
+	(car (cdr closure)))
+
+;;; Makes an environment for when the lambda function is running
+;;; All parameters matched to formal arguments will be placed in this environment
+(defun make-envt ()
+	(make-hash-table :test #'equal))
 
 (defun get-formal (closure)
 	(car (cdr closure)))
 
 (defun get-body (closure)
-	(car (cdr (cdr closure))))
+	(car (cdr (cdr  closure))))
 
 (defun closure-p (expr)
 	(if (equal 'closure (car expr))
@@ -97,19 +111,29 @@
 ;;; (set! var 2)
 ;;; (set! var (lambda (x) (* x x))) for example
 ;;; TODO remove the seperate case for functions there shouldn't be a need for a seperate case
+;;; envt is the current environment that the set needs to modify
 (defun set-eval (expr)
 	(print "set-eval")
 	(print (caddr expr))
 	(set-variable (cadr expr) (evall (caddr expr))))
+
+;;; Sets up the starting environment
+(defvar *envts* ())
 	
 ;;; Hash table for holding user defined functions and variables 
 (defvar *sym-table* (make-hash-table :test #'equal))
 
 (defun set-variable (sym val)
-	(setf (gethash sym *sym-table*) val))
+	(setf (gethash sym (car *envts*)) val))
 
-(defun get-variable (sym)
-	(gethash sym *sym-table*))
+(defun get-variable (sym envts)
+	(if (equal nil envts)
+		(values nil nil)
+		(progn 
+			(multiple-value-setq (var flag) (gethash sym (car envts)))
+			(if (eql t flag)
+				(values var t)
+				(get-variable sym (cdr envts))))))
 
 (defvar *func-table* (make-hash-table :test #'equal))
 
