@@ -35,7 +35,7 @@
 			(if (eql t fl)
 				(if (not (consp sym))
 					sym ;; what the expr evaluates to
-					(lambda-run sym (mapcar #'evall (cdr expr)))) ; evaluates a user defined closure
+					(lambda-run (car expr) sym (mapcar #'evall (cdr expr)))) ; evaluates a user defined closure
 				(cond ((equal 'if (car expr)) (if-eval expr))
 							((equal 'set! (car expr)) (set-eval expr))
 							((equal 'quote (car expr)) (quote-eval expr))
@@ -48,14 +48,18 @@
 
 ;;; Creates a closure object given a lambda expression
 ;;; Doesn't run the function because it has no actual arguments only defines the function to be called later
+;;; A copy of *envts* at the time the function was called
 (defun lambda-eval (expr)
 	(print (cadr expr))
 	(print (cddr expr))
 	(make-closure (cadr expr) (cddr expr)))
 
 ;;; Runs a closure object as a function by matching formal parameters with actual parameters
-(defun lambda-run (closure args)
+(defun lambda-run (sym closure args)
 	(print "lambda-run")
+	(setq TEMP (copy-tree *envts*)) ;;; needs to be a deep copy
+	(setf *envts* (get-envt sym *envts*))
+	(print *envts*)
 	(push (make-envt) *envts*) ;;; make a local environment
 	(let ((formal-args (get-formal closure)) 
 				(body-exprs (get-body closure)))
@@ -64,17 +68,30 @@
 			(progn
 				(mapcar #'set-variable formal-args args)
 				(let ((result (mapcar #'evall body-exprs)))
-					(print *envts*)
+					;(print *envts*)
+					(setf *envts* TEMP) ;;; restore regular scope
 					(pop *envts*)
 					(nth (- (length result) 1) result))))))
 
 ;;; Creates a new closure with the envts being a deep copy of the list of current environments do a copy tree or something
 ;;; needs to be a deep copy for lexical scope preservation
-(defun make-closure (formal body)
+;;; A copy of *envts* at the time the closure was defined
+(defun make-closure (formal body )
 	(list 'closure formal body))
 
-(defun get-envt (closure)
-	(car (cdr closure)))
+;;; Restores *envts* to the state it was in when the function was defined
+(defun get-envt (sym envts)
+	(print "get-evnts")
+	(print envts)
+	(if (not (listp envts))
+		envts ;; top-level
+		(progn
+			(multiple-value-setq (op flag) (gethash sym (car envts)))
+			(if (equal t flag)
+				envts
+				(progn 
+					(pop envts)
+					(get-envt sym envts))))))
 
 ;;; Makes an environment for when the lambda function is running
 ;;; All parameters matched to formal arguments will be placed in this environment
@@ -127,10 +144,13 @@
 	(setf (gethash sym (car *envts*)) val))
 
 (defun get-variable (sym envts)
+	(print "get-variable")
 	(if (equal nil envts)
 		(values nil nil)
-		(progn 
-			(multiple-value-setq (var flag) (gethash sym (car envts)))
+		(progn
+			(if (listp envts)
+				(multiple-value-setq (var flag) (gethash sym (car envts)))
+				(multiple-value-setq (var flag) (gethash sym envts)))
 			(if (eql t flag)
 				(values var t)
 				(get-variable sym (cdr envts))))))
