@@ -24,8 +24,8 @@
 ;;; --> 16
 ;;; TODO maybe change the whole structure to a cond?
 (defun evall (expr)
-	(print "EVALL")
-	(print expr)
+	;(print "EVALL")
+	;(print expr)
 	(if (atomp expr)
 		expr
 		(progn
@@ -42,7 +42,7 @@
 							((equal 'lambda (car expr)) (lambda-eval expr))
 							(t 
 								(multiple-value-setq (op flag) (get-function (car expr)))
-								(print "last...")
+								;(print "last...")
 								(if (eql flag t)
 									(apply op (mapcar #'evall (rest expr))))))))))
 
@@ -50,16 +50,16 @@
 ;;; Doesn't run the function because it has no actual arguments only defines the function to be called later
 ;;; A copy of *envts* at the time the function was called
 (defun lambda-eval (expr)
-	(print (cadr expr))
-	(print (cddr expr))
+	;(print (cadr expr))
+	;(print (cddr expr))
 	(make-closure (cadr expr) (cddr expr)))
 
 ;;; Runs a closure object as a function by matching formal parameters with actual parameters
 (defun lambda-run (sym closure args)
-	(print "lambda-run")
+	;(print "lambda-run")
 	(setq TEMP (copy-tree *envts*)) ;;; needs to be a deep copy
 	(setf *envts* (get-envt sym *envts*))
-	(print *envts*)
+	;(print *envts*)
 	(push (make-envt) *envts*) ;;; make a local environment
 	(let ((formal-args (get-formal closure)) 
 				(body-exprs (get-body closure)))
@@ -81,8 +81,8 @@
 
 ;;; Restores *envts* to the state it was in when the function was defined
 (defun get-envt (sym envts)
-	(print "get-evnts")
-	(print envts)
+	;(print "get-evnts")
+	;(print envts)
 	(if (not (listp envts))
 		envts ;; top-level
 		(progn
@@ -130,8 +130,8 @@
 ;;; TODO remove the seperate case for functions there shouldn't be a need for a seperate case
 ;;; envt is the current environment that the set needs to modify
 (defun set-eval (expr)
-	(print "set-eval")
-	(print (caddr expr))
+	;(print "set-eval")
+	;(print (caddr expr))
 	(set-variable (cadr expr) (evall (caddr expr))))
 
 ;;; Sets up the starting environment
@@ -144,7 +144,7 @@
 	(setf (gethash sym (car *envts*)) val))
 
 (defun get-variable (sym envts)
-	(print "get-variable")
+	;(print "get-variable")
 	(if (equal nil envts)
 		(values nil nil)
 		(progn
