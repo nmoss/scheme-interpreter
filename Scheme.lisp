@@ -58,6 +58,7 @@
 										((equal 'if (car expr)) (if-eval expr)) ;; start of special forms checking
 										((equal 'set! (car expr)) (set-eval expr))
 										((equal 'quote (car expr)) (quote-eval expr))
+										((equal 'begin (car expr)) (begin-eval expr))
 										((equal 'lambda (car expr)) (lambda-eval expr))
 										(t ;; must be a built in function 
 											(multiple-value-setq (op flag) (get-function (car expr)))
@@ -127,6 +128,14 @@
 ;;; --> X
 (defun quote-eval (expr)
 	(cadr expr))
+
+;;; (if (= 1 1) (begin 
+;;; 							(+ 1 1)
+;;; 							(+ 2 2))
+;;; 							2)
+;;; Evaluates begin by making a list of exprs in the begin block and evaluating them
+(defun begin-eval (expr)
+	(car (last (mapcar #'evall (cdr expr)))))
 
 ;;; Evaluates an IF expression
 ;;; (if-eval (if (= 1 1) 1 2)
