@@ -2,7 +2,9 @@
 ;;; Basic Scheme Interpreter
 ;;; ========================
 
-;;; Read-eval-print
+;;; Read-eval-print loop
+;;; read takes s-expressions which are evaluated by evall,
+;;; the initial environment and symbol table is also set up
 (defun revalp ()
 	(set-functions)
 	(if (equal nil *envts*)
@@ -11,6 +13,7 @@
 	(print (evall (read)))
 	(revalp))
 
+;;; Returns true if the function is a number, else returns nil 
 (defun atomp (x)
 	(if (numberp x) t nil))
 
@@ -23,43 +26,53 @@
 ;;; (+ 3 4 9)
 ;;; --> 16
 ;;; TODO maybe change the whole structure to a cond?
+;(defun evall (expr)
+;	(if (atomp expr)
+;		expr
+;		(progn
+;			(if (consp expr) ;; change which one is running depending on if a function call or variable
+;				(multiple-value-setq (sym fl) (get-variable (car expr) *envts*)) ;; to handle (f 3) for example 
+;				(multiple-value-setq (sym fl) (get-variable expr *envts*)))
+;			(if (eql t fl)
+;				(if (not (consp sym))
+;					sym ;; what the expr evaluates to
+;					(lambda-run (car expr) sym (mapcar #'evall (cdr expr)))) ; evaluates a user defined closure
+;				(cond ((equal 'if (car expr)) (if-eval expr))
+;							((equal 'set! (car expr)) (set-eval expr))
+;							((equal 'quote (car expr)) (quote-eval expr))
+;							((equal 'lambda (car expr)) (lambda-eval expr))
+;							(t 
+;								(multiple-value-setq (op flag) (get-function (car expr)))
+;								(if (eql flag t)
+;									(apply op (mapcar #'evall (rest expr))))))))))
+
 (defun evall (expr)
-	;(print "EVALL")
-	;(print expr)
-	(if (atomp expr)
-		expr
-		(progn
-			(if (consp expr) ;; change which one is running depending on if a function call or variable
-				(multiple-value-setq (sym fl) (get-variable (car expr) *envts*)) ;; to handle (f 3) for example 
-				(multiple-value-setq (sym fl) (get-variable expr *envts*)))
-			(if (eql t fl)
-				(if (not (consp sym))
-					sym ;; what the expr evaluates to
-					(lambda-run (car expr) sym (mapcar #'evall (cdr expr)))) ; evaluates a user defined closure
-				(cond ((equal 'if (car expr)) (if-eval expr))
-							((equal 'set! (car expr)) (set-eval expr))
-							((equal 'quote (car expr)) (quote-eval expr))
-							((equal 'lambda (car expr)) (lambda-eval expr))
-							(t 
-								(multiple-value-setq (op flag) (get-function (car expr)))
-								;(print "last...")
-								(if (eql flag t)
-									(apply op (mapcar #'evall (rest expr))))))))))
+	(cond ((atomp expr) expr) ;; if it's an atom should evaluate to itself
+				((not (consp expr)) (multiple-value-setq (sym fl) (get-variable expr *envts*))
+														(if (eql t fl)
+															sym)) ;; should be variable that maps to a value x -> 3 for example
+				((consp expr) (multiple-value-setq (sym fl) (get-variable (car expr) *envts*)) ;;; expr is an s-expression so could be any of the s-expression forms
+											(cond
+												((eql fl t)(lambda-run (car expr) sym (mapcar #'evall (cdr expr)))) ;; if expr is a cons like (f 2) and f is in the environment, than f must be a function call 
+												((equal 'if (car expr)) (if-eval expr)) ;; start of special forms checking
+												((equal 'set! (car expr)) (set-eval expr))
+												((equal 'quote (car expr)) (quote-eval expr))
+												((equal 'lambda (car expr)) (lambda-eval expr))
+												(t ;; must be a built in function 
+													(multiple-value-setq (op flag) (get-function (car expr)))
+													(if (eql flag t)
+														(apply op (mapcar #'evall (rest expr)))))))))
 
 ;;; Creates a closure object given a lambda expression
 ;;; Doesn't run the function because it has no actual arguments only defines the function to be called later
 ;;; A copy of *envts* at the time the function was called
 (defun lambda-eval (expr)
-	;(print (cadr expr))
-	;(print (cddr expr))
 	(make-closure (cadr expr) (cddr expr)))
 
 ;;; Runs a closure object as a function by matching formal parameters with actual parameters
 (defun lambda-run (sym closure args)
-	;(print "lambda-run")
 	(setq TEMP (copy-tree *envts*)) ;;; needs to be a deep copy
 	(setf *envts* (get-envt sym *envts*))
-	;(print *envts*)
 	(push (make-envt) *envts*) ;;; make a local environment
 	(let ((formal-args (get-formal closure)) 
 				(body-exprs (get-body closure)))
@@ -68,21 +81,17 @@
 			(progn
 				(mapcar #'set-variable formal-args args)
 				(let ((result (mapcar #'evall body-exprs)))
-					;(print *envts*)
 					(setf *envts* TEMP) ;;; restore regular scope
 					(pop *envts*)
 					(nth (- (length result) 1) result))))))
 
-;;; Creates a new closure with the envts being a deep copy of the list of current environments do a copy tree or something
-;;; needs to be a deep copy for lexical scope preservation
-;;; A copy of *envts* at the time the closure was defined
+;;; Creates a new closure with formal being the formal parameters of the lambda expression,
+;;; and the body being expressions to be evaluated
 (defun make-closure (formal body )
 	(list 'closure formal body))
 
 ;;; Restores *envts* to the state it was in when the function was defined
 (defun get-envt (sym envts)
-	;(print "get-evnts")
-	;(print envts)
 	(if (not (listp envts))
 		envts ;; top-level
 		(progn
@@ -98,12 +107,15 @@
 (defun make-envt ()
 	(make-hash-table :test #'equal))
 
+;;; Returns the formal arguments of a given closure (lambda expression)
 (defun get-formal (closure)
 	(car (cdr closure)))
 
+;;; Returns the body of a closure (lambda expression)
 (defun get-body (closure)
 	(car (cdr (cdr  closure))))
 
+;;; Returns true if the expr is a closure, nil otherwise
 (defun closure-p (expr)
 	(if (equal 'closure (car expr))
 		t
@@ -124,14 +136,10 @@
 		(evall (caddr expr))
 		(evall (cadddr expr))))
 
-;;; Sets a variable to given value which is either an atom or a function, TODO add environment/scope later
+;;; Sets a variable to given value which is either an atom or a function, 
 ;;; (set! var 2)
 ;;; (set! var (lambda (x) (* x x))) for example
-;;; TODO remove the seperate case for functions there shouldn't be a need for a seperate case
-;;; envt is the current environment that the set needs to modify
 (defun set-eval (expr)
-	;(print "set-eval")
-	;(print (caddr expr))
 	(set-variable (cadr expr) (evall (caddr expr))))
 
 ;;; Sets up the starting environment
@@ -140,11 +148,12 @@
 ;;; Hash table for holding user defined functions and variables 
 (defvar *sym-table* (make-hash-table :test #'equal))
 
+;;; Saves a variable in the current scope,
+;;; *envts* should be moved depending on where SET! is called
 (defun set-variable (sym val)
 	(setf (gethash sym (car *envts*)) val))
 
 (defun get-variable (sym envts)
-	;(print "get-variable")
 	(if (equal nil envts)
 		(values nil nil)
 		(progn
@@ -175,7 +184,6 @@
 (defun get-function (op)
 	(gethash op *func-table*))
 
-;;; TODO add &rest to handle arbitrary number of arguments
 (defun scheme-and (expr1 expr2)
 	(if (and (eql t expr1) (eql t expr2))
 		t 
