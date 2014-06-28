@@ -47,21 +47,22 @@
 ;									(apply op (mapcar #'evall (rest expr))))))))))
 
 (defun evall (expr)
-	(cond ((atomp expr) expr) ;; if it's an atom should evaluate to itself
-				((not (consp expr)) (multiple-value-setq (sym fl) (get-variable expr *envts*))
-														(if (eql t fl)
-															sym)) ;; should be variable that maps to a value x -> 3 for example
-				((consp expr) (multiple-value-setq (sym fl) (get-variable (car expr) *envts*)) ;;; expr is an s-expression so could be any of the s-expression forms
-											(cond
-												((eql fl t)(lambda-run (car expr) sym (mapcar #'evall (cdr expr)))) ;; if expr is a cons like (f 2) and f is in the environment, than f must be a function call 
-												((equal 'if (car expr)) (if-eval expr)) ;; start of special forms checking
-												((equal 'set! (car expr)) (set-eval expr))
-												((equal 'quote (car expr)) (quote-eval expr))
-												((equal 'lambda (car expr)) (lambda-eval expr))
-												(t ;; must be a built in function 
-													(multiple-value-setq (op flag) (get-function (car expr)))
-													(if (eql flag t)
-														(apply op (mapcar #'evall (rest expr)))))))))
+	(cond
+		((atomp expr) expr) ;; if it's an atom should evaluate to itself
+		((not (consp expr)) (multiple-value-setq (sym fl) (get-variable expr *envts*))
+												(if (eql t fl)
+													sym)) ;; should be variable that maps to a value x -> 3 for example
+		((consp expr) (multiple-value-setq (sym fl) (get-variable (car expr) *envts*)) ;;; expr is an s-expression so could be any of the s-expression forms
+									(cond
+										((eql fl t)(lambda-run (car expr) sym (mapcar #'evall (cdr expr)))) ;; if expr is a cons like (f 2) and f is in the environment, than f must be a function call 
+										((equal 'if (car expr)) (if-eval expr)) ;; start of special forms checking
+										((equal 'set! (car expr)) (set-eval expr))
+										((equal 'quote (car expr)) (quote-eval expr))
+										((equal 'lambda (car expr)) (lambda-eval expr))
+										(t ;; must be a built in function 
+											(multiple-value-setq (op flag) (get-function (car expr)))
+											(if (eql flag t)
+												(apply op (mapcar #'evall (rest expr)))))))))
 
 ;;; Creates a closure object given a lambda expression
 ;;; Doesn't run the function because it has no actual arguments only defines the function to be called later
@@ -153,6 +154,9 @@
 (defun set-variable (sym val)
 	(setf (gethash sym (car *envts*)) val))
 
+;;; Returns the value of sym that is sym being a variable,
+;;; starts with the most local environment and moves to the top-level until it finds a value
+;;; the envts passed in should start in the scope that the variable sym was defined in.
 (defun get-variable (sym envts)
 	(if (equal nil envts)
 		(values nil nil)
@@ -173,6 +177,11 @@
 	(setf (gethash '* *func-table*) #'*)
 	(setf (gethash '/ *func-table*) #'/)
 	(setf (gethash '= *func-table*) #'=)
+	(setf (gethash '> *func-table*) #'>)
+	(setf (gethash '< *func-table*) #'<)
+	(setf (gethash '<= *func-table*) #'<=)
+	(setf (gethash '>= *func-table*) #'>=)
+	(setf (gethash 'equal *func-table*) #'equal)
 	(setf (gethash 'list *func-table*) #'list)
 	(setf (gethash 'car *func-table*) #'car)
 	(setf (gethash 'cdr *func-table*) #'cdr)
