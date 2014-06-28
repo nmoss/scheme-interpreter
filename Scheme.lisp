@@ -157,9 +157,6 @@
 
 (defvar *func-table* (make-hash-table :test #'equal))
 
-(defun set-function (name body)
-	(setf (gethash name *func-table*)  (eval body))) ;;; TODO figure out what eval is doing to this lambda expression
-
 ;;; Sets up the built in primitives from the underlying lisp implementation
 (defun set-functions ()
 	(setf (gethash '+ *func-table*) #'+)
