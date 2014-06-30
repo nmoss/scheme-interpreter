@@ -60,6 +60,7 @@
 										((equal 'quote (car expr)) (quote-eval expr))
 										((equal 'begin (car expr)) (begin-eval expr))
 										((equal 'lambda (car expr)) (lambda-eval expr))
+										((equal t (macro-p expr)) (macro-expand expr))
 										(t ;; must be a built in function 
 											(multiple-value-setq (op flag) (get-function (car expr)))
 											(if (eql flag t)
@@ -195,6 +196,7 @@
 	(setf (gethash 'car *func-table*) #'car)
 	(setf (gethash 'cdr *func-table*) #'cdr)
 	(setf (gethash 'cons *func-table*) #'cons)
+	(setf (gethash 'define-syntax *func-table*) #'define-syntax)
 	(setf (gethash 'and *func-table*) #'scheme-and)
 	(setf (gethash 'or *func-table*) #'scheme-or)
 	(setf (gethash 'not *func-table*) #'scheme-not))
@@ -216,4 +218,59 @@
 	(if (eql t expr)
 		nil
 		t))
+
+;;; Macro System
+;;; ========================
+
+;;; Hash table for storing all the macro patterns
+(defvar *macro-table* (make-hash-table :test #'equal))
+
+;;; Tests if a given expr is a macro by checking to see if the (car expr) is in the table
+(defun macro-p (expr)
+	(multiple-value-setq (a b) (gethash (car expr) *macro-table*))
+	b)
+
+;;; Expands the pattern into the template
+(defun macro-expand (expr)
+	(let* ((macro (gethash (car expr) *macro-table*))
+				(syntax-rules (get-syntax macro))
+				(body (syntax-set (cdr expr) (cdr syntax-rules) (get-template macro)))) ;; going to be a list of some kind need to match expressions to variables in the list
+		(if (flat-p body)
+			(evall 'body)
+			(car (last (mapcar #'evall body))))))
+
+(defun flat-p (body)
+	(if (equal nil body)
+		t
+		(if (consp (car body))
+			nil
+			(flat-p (cdr body)))))
+
+;;; Inserts the expressions in place of the arguments in the template of the macro
+(defun syntax-set (exprs args body)
+	(if (or (equal nil exprs) (equal nil args))
+		body
+		(syntax-set (cdr exprs) (cdr args) (subst (car exprs) (car args) body))))
+
+;;; Sets up a new macro
+(defun store-macro (macro)
+	(setf (gethash (car macro) *macro-table*) macro))
+
+(defun define-syntax (name pattern body)
+	(store-macro (list name pattern body)))
+
+(defun get-syntax (macro) 
+	(cadr macro))
+
+(defun get-template (macro)
+	(caddr macro))
+		
+;;; Set up some common macros 
+(define-syntax 'let 
+							 '(let var value-expr body-expr)
+							 '((set! fffn (lambda (var) body-expr)) (fffn value-expr)))
+
+(define-syntax 'or2 '(or2 a b) '(if a a b))
+
+
 
