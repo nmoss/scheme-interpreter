@@ -221,9 +221,14 @@
 
 ;;; Macro System
 ;;; ========================
+;;; TODO need to implement multiple arguments e.g. '...' in Scheme
 
 ;;; Hash table for storing all the macro patterns
 (defvar *macro-table* (make-hash-table :test #'equal))
+
+;TODO move these to local scope
+(defvar *symbols* ())
+(defvar *exprs* ())
 
 ;;; Tests if a given expr is a macro by checking to see if the (car expr) is in the table
 (defun macro-p (expr)
@@ -232,19 +237,22 @@
 
 ;;; Expands the pattern into the template
 (defun macro-expand (expr)
+	(setf *symbols* ())
+	(setf *exprs* ())
 	(let* ((macro (gethash (car expr) *macro-table*))
-				(syntax-rules (get-syntax macro))
-				(body (syntax-set (cdr expr) (cdr syntax-rules) (get-template macro)))) ;; going to be a list of some kind need to match expressions to variables in the list
-		(if (flat-p body)
-			(evall 'body)
+				(syntax-rules (get-syntax macro)))
+		(tree-matching syntax-rules expr)
+		(let ((body (syntax-set *exprs* *symbols* (get-template macro)))) ;; going to be a list of some kind need to match expressions to variables in the list
+			(print body)
+			;;;(evall body))))
 			(car (last (mapcar #'evall body))))))
 
-(defun flat-p (body)
-	(if (equal nil body)
-		t
-		(if (consp (car body))
-			nil
-			(flat-p (cdr body)))))
+;(defun flat-p (body)
+;	(if (equal nil body)
+;		t
+;		(if (consp (car body))
+;			nil
+;			(flat-p (cdr body)))))
 
 ;;; Inserts the expressions in place of the arguments in the template of the macro
 (defun syntax-set (exprs args body)
@@ -264,13 +272,33 @@
 
 (defun get-template (macro)
 	(caddr macro))
-		
+
+;;; Takes two syntax trees matching a value in one tree to an expression in anothor
+;;; Returns two lists such that the first list is a list of expressions '((+ 1 1) (+ 2 2))
+;;; The second list is the list of symbols the expressions replace '(a b)
+(defun tree-matching (first-tree second-tree)
+	(if (not (consp first-tree))
+		t
+		(progn
+			(if (not (consp (car first-tree)))
+				(progn
+					(push (car first-tree) *symbols*)
+					(push (car second-tree) *exprs*))
+				(progn
+					(mapcar #'push-wrapper (car first-tree) *symbols*)
+					(mapcar  #'push-wrapper (car second-tree) *exprs*)))
+			(tree-matching (car first-tree) (car second-tree))
+			(tree-matching (cdr first-tree) (cdr second-tree)))))
+
+(defun push-wrapper (node lst)
+	(push node lst))
+	
 ;;; Set up some common macros 
 (define-syntax 'let 
-							 '(let var value-expr body-expr)
-							 '((set! fffn (lambda (var) body-expr)) (fffn value-expr)))
+							 '(let ((var value-expr)) body-expr)
+							 '((set! nnnnn (lambda (var) body-expr)) (nnnnn value-expr)))
 
-(define-syntax 'or2 '(or2 a b) '(if a a b))
+(define-syntax 'or2 '(or2 a b) '((if a a b)))
 
 
 
