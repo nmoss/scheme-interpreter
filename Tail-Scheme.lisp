@@ -1,5 +1,6 @@
 ;;; Nicholas Moss
 ;;; Basic Scheme Interpreter
+;;; Tail call optimized version
 ;;; ========================
 
 (defun define-syntax () nil)
@@ -23,60 +24,36 @@
 
 (defun evall (expr)
 	(prog ()
-	  :EVALL
+		:EVALL
 		(return
 			(cond
-				((atomp expr) (setq ans1 expr) ;; if it's an atom should evaluate to itself
-											(if (gethash 'POP-FLAG (car *envts*))
-												(pop *envts*))
-											ans1)
+				((atomp expr) expr) ;; if it's an atom should evaluate to itself
 				((not (consp expr)) (multiple-value-setq (sym fl) (get-variable expr *envts*))
-														(setq ans2 nil)
 														(if (eql t fl)
-															(setq ans2 sym)) ;; should be variable that maps to a value x -> 3 for example/
-														(if (gethash 'POP-FLAG (car *envts*))
-															(pop *envts*))
-														ans2)
+															sym)) ;; should be variable that maps to a value x -> 3 for example
 				((consp expr) (multiple-value-setq (sym fl) (get-variable (car expr) *envts*)) ;;; expr is an s-expression
-											(cond 
-												((eql fl t)
-												 (let ((name (car expr)) (body sym) (args (mapcar #'evall (cdr expr))) (temp (copy-tree *envts*)))
-													 (setf *envts* (get-envt name *envts*))
-													 (push (make-envt) *envts*)
-													 (let ((formal-args (get-formal body)) (body-exprs (get-body body)))
-														 (mapcar #'set-variable formal-args args)
-														 (setq last-expr (car (last body-exprs)))
-														 (remove last-expr body-exprs)
-														 (let ((result (mapcar #'evall body-exprs)))
-															 ;(setf *envts* temp)
-															 ;(pop *envts*)
-															 (setf (gethash 'POP-FLAG (car *envts*)) 'POP-FLAG)
-															 (setf expr last-expr))))
-												 (GO :EVALL))
-															 ;(nth (- (length result) 1) result)))))
-												((consp (car expr)) (evall `(set! INTERNTEMP ,(car expr))) ;; ((lambda (x) (* x x)) 2) -> 2
-																						(print (cdr expr))
-																						(print (car expr))
-																						(setq ans (evall `(INTERNTEMP ,@(mapcar #'evall (cdr expr)))))
-																						(remhash 'INTERNTEMP *sym-table*)
+											(cond
+												((eql fl t)(lambda-run (car expr) sym (mapcar #'(lambda (x) (evall x)) (cdr expr)))) ;; f must be a function call
+												((consp (car expr)) (evall `(set! __INTERNTEMP ,(car expr))) ;; ((lambda (x) (* x x)) 2) -> 2
+																						(setq ans (evall `(__INTERNTEMP ,@(mapcar #'(lambda (x) (evall x)) (cdr expr)))))
+																						(remhash '__INTERNTEMP *sym-table*)
 																						ans)
-												((equal 'if (car expr)) (setf expr (if (evall (cadr expr))
-																														 (third expr)
+												((equal 'if (car expr)) (setf expr (if (evall (second expr))
+																														 (third expr) 
 																														 (fourth expr)))
-																								(GO :EVALL))
+																								(go :EVALL))
 												((equal 'set! (car expr)) (set-eval expr))
-												((equal 'quote (car expr)) (cadr expr))
+												((equal 'quote (car expr)) (second expr))
 												((equal 'begin (car expr)) (pop expr)
 																									 (loop while (rest expr) do (evall (pop expr)))
 																									 (setf expr (first expr))
-																									 (GO :EVALL))
+																									 (go :EVALL))
 												((equal 'lambda (car expr)) (lambda-eval expr))
-												((scheme-macro (first expr)) (setf expr (macro-expand expr))
-																										 (GO :EVALL))
+												((scheme-macro (first expr)) (setf expr (macro-expand expr)) (go :EVALL))
 												(t ;; must be a built in function 
 													(multiple-value-setq (op flag) (get-function (car expr)))
 													(if (eql flag t)
-														(apply op (mapcar #'evall (rest expr)))))))))))
+														(apply op (mapcar #'(lambda (x) (evall x)) (rest expr)))))))))))
 
 ;;; Creates a closure object given a lambda expression
 ;;; Doesn't run the function because it has no actual arguments only defines the function to be called later
@@ -86,19 +63,36 @@
 
 ;;; Runs a closure object as a function by matching formal parameters with actual parameters
 (defun lambda-run (sym closure args)
-	(setq TEMP (copy-tree *envts*)) ;;; needs to be a deep copy
-	(setf *envts* (get-envt sym *envts*))
-	(push (make-envt) *envts*) ;;; make a local environment
-	(let ((formal-args (get-formal closure)) 
-				(body-exprs (get-body closure)))
-		(if (not (eql (length args) (length formal-args)))
-			(print "Error args not matching.")
+	(prog ()
+				:TAIL-CALL
+		(return
 			(progn
-				(mapcar #'set-variable formal-args args)
-				(let ((result (mapcar #'evall body-exprs)))
-					(setf *envts* TEMP) ;;; restore regular scope
-					(pop *envts*)
-					(nth (- (length result) 1) result))))))
+				(setq TEMP (copy-tree *envts*)) ;;; needs to be a deep copy
+				(setf *envts* (get-envt sym *envts*))
+				(push (make-envt) *envts*) ;;; make a local environment
+				(let ((formal-args (get-formal closure)) 
+							(body-exprs (get-body closure)))
+					(if (not (eql (length args) (length formal-args)))
+						(print "Error args not matching.")
+						(progn
+							(mapcar #'set-variable formal-args args)
+							(setq tailform (car (last body-exprs)))
+							(when (consp tailform)
+								(if (equal 'if (car tailform))
+									(setf tailform (if (evall (second tailform))
+																	 (third tailform)
+																	 (fourth tailform)))))
+							(if (consp tailform)
+								(when (equal sym (car tailform))
+								  (setf body-exprs (remove (car (last body-exprs)) body-exprs))))
+							(let ((result (mapcar #'evall body-exprs)))
+								(when (consp tailform)
+									(when (equal sym (car tailform))
+										(setf args (mapcar #'evall (rest tailform)))
+										(go :TAIL-CALL)))
+								(setf *envts* TEMP) ;;; restore regular scope
+								(pop *envts*)
+								(nth (- (length result) 1) result)))))))))
 
 ;;; Creates a new closure with formal being the formal parameters of the lambda expression,
 ;;; and the body being expressions to be evaluated

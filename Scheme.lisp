@@ -2,6 +2,10 @@
 ;;; Basic Scheme Interpreter
 ;;; ========================
 
+(defun define-syntax () nil)
+
+(load "Norvig-Macro.lisp")
+
 ;;; Read-eval-print loop
 ;;; read takes s-expressions which are evaluated by evall,
 ;;; the initial environment and symbol table is also set up
@@ -17,50 +21,27 @@
 (defun atomp (x)
 	(if (numberp x) t nil))
 
-;;; Reads a Scheme expression, if the expression is a number (atom) it returns that number
-;;; If not it looks up the associated function (value of the symbol), and then evaluates the arguments which may themselves be functions.
-;;; (eval-2 (+ 3 4 (+ 4 5)))
-;;; (+ (evall 3) (evall 4) (evall (+ 4 5)))
-;;; (+ 3 4 (+ (evall 4) (evall 5)))
-;;; (+ 3 4 (+ 4 5))
-;;; (+ 3 4 9)
-;;; --> 16
-;;; TODO maybe change the whole structure to a cond?
-;(defun evall (expr)
-;	(if (atomp expr)
-;		expr
-;		(progn
-;			(if (consp expr) ;; change which one is running depending on if a function call or variable
-;				(multiple-value-setq (sym fl) (get-variable (car expr) *envts*)) ;; to handle (f 3) for example 
-;				(multiple-value-setq (sym fl) (get-variable expr *envts*)))
-;			(if (eql t fl)
-;				(if (not (consp sym))
-;					sym ;; what the expr evaluates to
-;					(lambda-run (car expr) sym (mapcar #'evall (cdr expr)))) ; evaluates a user defined closure
-;				(cond ((equal 'if (car expr)) (if-eval expr))
-;							((equal 'set! (car expr)) (set-eval expr))
-;							((equal 'quote (car expr)) (quote-eval expr))
-;							((equal 'lambda (car expr)) (lambda-eval expr))
-;							(t 
-;								(multiple-value-setq (op flag) (get-function (car expr)))
-;								(if (eql flag t)
-;									(apply op (mapcar #'evall (rest expr))))))))))
-
 (defun evall (expr)
 	(cond
 		((atomp expr) expr) ;; if it's an atom should evaluate to itself
 		((not (consp expr)) (multiple-value-setq (sym fl) (get-variable expr *envts*))
 												(if (eql t fl)
 													sym)) ;; should be variable that maps to a value x -> 3 for example
-		((consp expr) (multiple-value-setq (sym fl) (get-variable (car expr) *envts*)) ;;; expr is an s-expression so could be any of the s-expression forms
+		((consp expr) (multiple-value-setq (sym fl) (get-variable (car expr) *envts*)) ;;; expr is an s-expression
 									(cond
-										((eql fl t)(lambda-run (car expr) sym (mapcar #'evall (cdr expr)))) ;; if expr is a cons like (f 2) and f is in the environment, than f must be a function call 
+										((eql fl t)(lambda-run (car expr) sym (mapcar #'evall (cdr expr)))) ;; f must be a function call
+										((consp (car expr)) (evall `(set! INTERNTEMP ,(car expr))) ;; ((lambda (x) (* x x)) 2) -> 2
+																				(print (cdr expr))
+																				(print (car expr))
+																				(setq ans (evall `(INTERNTEMP ,@(mapcar #'evall (cdr expr)))))
+																				(remhash 'INTERNTEMP *sym-table*)
+																				ans)
 										((equal 'if (car expr)) (if-eval expr)) ;; start of special forms checking
 										((equal 'set! (car expr)) (set-eval expr))
 										((equal 'quote (car expr)) (quote-eval expr))
 										((equal 'begin (car expr)) (begin-eval expr))
 										((equal 'lambda (car expr)) (lambda-eval expr))
-										((equal t (macro-p expr)) (macro-expand expr))
+										((scheme-macro (first expr)) (evall (macro-expand expr)))
 										(t ;; must be a built in function 
 											(multiple-value-setq (op flag) (get-function (car expr)))
 											(if (eql flag t)
@@ -218,87 +199,6 @@
 	(if (eql t expr)
 		nil
 		t))
-
-;;; Macro System
-;;; ========================
-;;; TODO need to implement multiple arguments e.g. '...' in Scheme
-
-;;; Hash table for storing all the macro patterns
-(defvar *macro-table* (make-hash-table :test #'equal))
-
-;TODO move these to local scope
-(defvar *symbols* ())
-(defvar *exprs* ())
-
-;;; Tests if a given expr is a macro by checking to see if the (car expr) is in the table
-(defun macro-p (expr)
-	(multiple-value-setq (a b) (gethash (car expr) *macro-table*))
-	b)
-
-;;; Expands the pattern into the template
-(defun macro-expand (expr)
-	(setf *symbols* ())
-	(setf *exprs* ())
-	(let* ((macro (gethash (car expr) *macro-table*))
-				(syntax-rules (get-syntax macro)))
-		(tree-matching syntax-rules expr)
-		(let ((body (syntax-set *exprs* *symbols* (get-template macro)))) ;; going to be a list of some kind need to match expressions to variables in the list
-			(print body)
-			;;;(evall body))))
-			(car (last (mapcar #'evall body))))))
-
-;(defun flat-p (body)
-;	(if (equal nil body)
-;		t
-;		(if (consp (car body))
-;			nil
-;			(flat-p (cdr body)))))
-
-;;; Inserts the expressions in place of the arguments in the template of the macro
-(defun syntax-set (exprs args body)
-	(if (or (equal nil exprs) (equal nil args))
-		body
-		(syntax-set (cdr exprs) (cdr args) (subst (car exprs) (car args) body))))
-
-;;; Sets up a new macro
-(defun store-macro (macro)
-	(setf (gethash (car macro) *macro-table*) macro))
-
-(defun define-syntax (name pattern body)
-	(store-macro (list name pattern body)))
-
-(defun get-syntax (macro) 
-	(cadr macro))
-
-(defun get-template (macro)
-	(caddr macro))
-
-;;; Takes two syntax trees matching a value in one tree to an expression in anothor
-;;; Returns two lists such that the first list is a list of expressions '((+ 1 1) (+ 2 2))
-;;; The second list is the list of symbols the expressions replace '(a b)
-(defun tree-matching (first-tree second-tree)
-	(if (not (consp first-tree))
-		t
-		(progn
-			(if (not (consp (car first-tree)))
-				(progn
-					(push (car first-tree) *symbols*)
-					(push (car second-tree) *exprs*))
-				(progn
-					(mapcar #'push-wrapper (car first-tree) *symbols*)
-					(mapcar  #'push-wrapper (car second-tree) *exprs*)))
-			(tree-matching (car first-tree) (car second-tree))
-			(tree-matching (cdr first-tree) (cdr second-tree)))))
-
-(defun push-wrapper (node lst)
-	(push node lst))
-	
-;;; Set up some common macros 
-(define-syntax 'let 
-							 '(let ((var value-expr)) body-expr)
-							 '((set! nnnnn (lambda (var) body-expr)) (nnnnn value-expr)))
-
-(define-syntax 'or2 '(or2 a b) '((if a a b)))
 
 
 
