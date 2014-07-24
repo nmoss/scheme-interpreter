@@ -5,7 +5,7 @@
 
 (defun define-syntax () nil)
 
-(load "Norvig-Macro.lisp")
+(load "Macro.lisp")
 
 ;;; Read-eval-print loop
 ;;; read takes s-expressions which are evaluated by evall,

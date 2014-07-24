@@ -4,7 +4,7 @@
 
 (defun define-syntax () nil)
 
-(load "Norvig-Macro.lisp")
+(load "Macro.lisp")
 
 ;;; Read-eval-print loop
 ;;; read takes s-expressions which are evaluated by evall,
@@ -31,8 +31,6 @@
 									(cond
 										((eql fl t)(lambda-run (car expr) sym (mapcar #'evall (cdr expr)))) ;; f must be a function call
 										((consp (car expr)) (evall `(set! INTERNTEMP ,(car expr))) ;; ((lambda (x) (* x x)) 2) -> 2
-																				(print (cdr expr))
-																				(print (car expr))
 																				(setq ans (evall `(INTERNTEMP ,@(mapcar #'evall (cdr expr)))))
 																				(remhash 'INTERNTEMP *sym-table*)
 																				ans)
