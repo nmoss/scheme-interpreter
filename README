@@ -9,14 +9,16 @@
 	Installation:
 
 	In order to run the interpreter a Common Lisp implemenation is needed,
-	specifically GNU CLISP. Clisp is available for Unix based systems including
-	GNU/Linux. <clisp.org>
+	specifically GNU CLISP. Clisp is available for Unix based systems
+	including GNU/Linux. <clisp.org>
 
-	In order to use the interpreter download the source file and on the terminal run:
+	In order to use the interpreter download the source file and
+	on the terminal run:
 	
 	clisp -i Scheme.lisp
 	
-	Once the interpreter is running, call the read-eval-print loop (REPL) with:
+	Once the interpreter is running, call the read-eval-print loop (REPL)
+	 with:
 
 	(revalp)
 
@@ -25,11 +27,12 @@
 	Documentation:
 	
 	The interpreter supports most Scheme expressions, 
-	but does not yet have a working macro system. Additionally not all of the built-in Scheme
-	procedures are defined. The idea was to keep the interpreter as minimal as possible. The user 
-	can either define their own or modify the source as needed. 
+	but does not yet have a working macro system.
+	Additionally not all of the built-in Scheme procedures are defined.
+	The idea was to keep the interpreter as minimal as possible.
+	The user can either define their own or modify the source as needed. 
 	
-	Complete list of built in functions:
+	List of some of the built in functions:
 		+
 		-
 		*
